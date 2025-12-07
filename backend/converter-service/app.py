@@ -54,10 +54,11 @@ from docx.oxml.table import CT_Tbl
 # Import docx2pdf
 try:
     from docx2pdf import convert as convert_to_pdf_word
+    import pythoncom
     DOCX2PDF_AVAILABLE = True
 except ImportError:
     DOCX2PDF_AVAILABLE = False
-    print("docx2pdf not available, falling back to manual engine.")
+    print("docx2pdf or pythoncom not available, falling back to manual engine.")
 
 def simulate_word_to_pdf(input_path, output_name):
     print(f"Starting conversion for: {input_path}")
@@ -69,17 +70,25 @@ def simulate_word_to_pdf(input_path, output_name):
     if DOCX2PDF_AVAILABLE and (input_path.endswith('.docx') or input_path.endswith('.doc')):
         try:
             print("Attempting Native Word Conversion...")
+            # Initialize COM for this thread (Critical for Flask)
+            pythoncom.CoInitialize()
+            
             # docx2pdf requires absolute paths
             abs_input = os.path.abspath(input_path)
             abs_output = os.path.abspath(result_path)
             
             convert_to_pdf_word(abs_input, abs_output)
             
-            if os.path.exists(abs_output):
+            if os.path.exists(abs_output) and os.path.getsize(abs_output) > 1000:
                 print("Native conversion successful!")
                 return result_path
+            else:
+                print("Native conversion output too small or missing. Fallback.")
         except Exception as e:
             print(f"Native Word conversion failed ({e}). Falling back to manual engine.")
+        finally:
+            try: pythoncom.CoUninitialize()
+            except: pass
     
     # METHOD 2: Manual ReportLab Construction (Fallback)
     # Re-implements document structure if Native conversion fails
