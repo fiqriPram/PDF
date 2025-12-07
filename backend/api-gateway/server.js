@@ -1,65 +1,77 @@
-// node-api-gateway/server.js
 const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 const app = express();
-const PORT = 3000;
-const PYTHON_CONVERTER_URL = 'http://localhost:5000/convert'; // Alamat layanan Python
+const PORT = 8000; // Changed to 8000 to avoid conflict with Frontend (3000)
+const PYTHON_CONVERTER_URL = 'http://localhost:5000/convert';
 
-// Konfigurasi Multer untuk menyimpan file di 'shared-storage'
+app.use(cors()); // Enable CORS for Frontend access
+
+// Configure Multer for shared storage
+// Use ../../ because api-gateway is in backend/api-gateway (depth 2)
 const upload = multer({
-    dest: path.join(__dirname, '../shared-storage/uploads/')
+    dest: path.join(__dirname, '../../shared-storage/uploads/')
 });
 
-// Pastikan direktori ada
-if (!fs.existsSync('../shared-storage/uploads/')) {
-    fs.mkdirSync('../shared-storage/uploads/', { recursive: true });
+// Ensure directory exists
+const uploadDir = path.join(__dirname, '../../shared-storage/uploads/');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Rute Upload dan Konversi
+// Upload and Convert Route
 app.post('/upload-convert', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).send('No file uploaded.');
     }
 
     const originalFilename = req.file.originalname;
-    const filePath = req.file.path; // Lokasi file di shared-storage
+    let filePath = req.file.path;
+
+    // Appending extension is crucial for Python backend to detect .docx
+    const ext = path.extname(originalFilename);
+    const newFilePath = filePath + ext;
+    fs.renameSync(filePath, newFilePath);
+    filePath = newFilePath;
 
     try {
-        // 1. Panggil layanan Python untuk melakukan konversi
+        // 1. Call Python Service
         const response = await axios.post(PYTHON_CONVERTER_URL, {
             filePath: filePath,
             outputFileName: originalFilename.replace(/\.[^/.]+$/, "") + '.pdf'
         });
 
-        const resultFilePath = response.data.resultPath; // Ambil lokasi file hasil dari Python
+        const resultFilePath = response.data.resultPath;
 
-        // 2. Kirim kembali informasi unduhan ke frontend
+        // 2. Return success with Download URL
+        // Frontend expects 'downloadUrl' from Gateway
         res.status(200).json({
             message: 'Conversion successful',
-            downloadPath: `/download/${path.basename(resultFilePath)}`
+            downloadUrl: `http://localhost:${PORT}/download/${path.basename(resultFilePath)}`
         });
 
     } catch (error) {
         console.error('Error during conversion process:', error.message);
-        // Hapus file yang diupload jika terjadi error
-        fs.unlink(filePath, () => { });
-        res.status(500).send('Conversion failed.');
+        if (error.response) console.error(error.response.data);
+        fs.unlink(filePath, () => { }); // Cleanup
+        res.status(500).json({ error: 'Conversion failed via Gateway' });
     }
 });
 
-// Rute Unduh (sederhana)
+// Download Route
 app.get('/download/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = path.join(__dirname, '../shared-storage/results/', filename);
+    // Resolve path relative to shared-storage correctly from api-gateway directory
+    const filePath = path.join(__dirname, '../../shared-storage/results/', filename);
 
-    // Pastikan file hasil ada sebelum dikirim
     if (fs.existsSync(filePath)) {
         res.download(filePath, filename);
     } else {
+        console.error('Download: File not found at', filePath);
         res.status(404).send('File not found.');
     }
 });

@@ -222,37 +222,45 @@ def simulate_word_to_pdf(input_path, output_name):
     
 @app.route('/convert', methods=['POST'])
 def convert():
-    # Check if the post request has the file part
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+    input_path = None
+    output_filename = None
     
-    file = request.files['file']
+    # CASE 1: Request from API Gateway (JSON)
+    if request.is_json:
+        data = request.get_json()
+        input_path = data.get('filePath')
+        output_filename = data.get('outputFileName')
     
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if file:
+    # CASE 2: Direct Upload (Multipart)
+    elif 'file' in request.files:
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+            
         filename = file.filename
         input_path = os.path.join(UPLOAD_DIR, filename)
         file.save(input_path)
+        output_filename = os.path.splitext(filename)[0] + '.pdf'
+
+    # Validation
+    if not input_path or not output_filename:
+        return jsonify({'error': 'Missing file or file path info'}), 400
         
-        try:
-            # Generate output filename
-            output_filename = os.path.splitext(filename)[0] + '.pdf'
-            
-            # Call conversion function
-            final_path = simulate_word_to_pdf(input_path, output_filename)
-            
-            # Return JSON with download URL
-            return jsonify({
-                'status': 'success',
-                'downloadUrl': f'http://localhost:5000/download/{output_filename}',
-                'fileName': output_filename
-            })
-            
-        except Exception as e:
-            print(f"Conversion Error: {e}")
-            return jsonify({'error': str(e)}), 500
+    try:
+        # Call conversion function
+        final_path = simulate_word_to_pdf(input_path, output_filename)
+        
+        # Return JSON compatible with both Gateway and Direct
+        return jsonify({
+            'status': 'success',
+            'resultPath': final_path, # Required by Gateway
+            'downloadUrl': f'http://localhost:5000/download/{output_filename}',
+            'fileName': output_filename
+        })
+        
+    except Exception as e:
+        print(f"Conversion Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/download/<path:filename>', methods=['GET'])
 def download(filename):

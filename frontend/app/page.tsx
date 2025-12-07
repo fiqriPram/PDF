@@ -27,7 +27,7 @@ export default function Home() {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://localhost:5000/convert', {
+      const response = await fetch('http://localhost:8000/upload-convert', {
         method: 'POST',
         body: formData,
       });
@@ -148,10 +148,10 @@ export default function Home() {
                     onClick={handleConvert}
                     disabled={!file || isUploading}
                     className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition-all duration-200 transform active:scale-[0.98] ${!file
-                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                        : isUploading
-                          ? 'bg-gray-700 text-white cursor-wait'
-                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30'
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                      : isUploading
+                        ? 'bg-gray-700 text-white cursor-wait'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30'
                       }`}
                   >
                     {isUploading ? (
