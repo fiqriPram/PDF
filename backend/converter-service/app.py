@@ -51,12 +51,38 @@ import docx
 from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
 
+# Import docx2pdf
+try:
+    from docx2pdf import convert as convert_to_pdf_word
+    DOCX2PDF_AVAILABLE = True
+except ImportError:
+    DOCX2PDF_AVAILABLE = False
+    print("docx2pdf not available, falling back to manual engine.")
+
 def simulate_word_to_pdf(input_path, output_name):
     print(f"Starting conversion for: {input_path}")
-    time.sleep(1) 
     
     result_path = os.path.join(RESULT_DIR, output_name)
     
+    # METHOD 1: Try Native Word Conversion (docx2pdf)
+    # This gives 1:1 "iLovePDF" quality.
+    if DOCX2PDF_AVAILABLE and (input_path.endswith('.docx') or input_path.endswith('.doc')):
+        try:
+            print("Attempting Native Word Conversion...")
+            # docx2pdf requires absolute paths
+            abs_input = os.path.abspath(input_path)
+            abs_output = os.path.abspath(result_path)
+            
+            convert_to_pdf_word(abs_input, abs_output)
+            
+            if os.path.exists(abs_output):
+                print("Native conversion successful!")
+                return result_path
+        except Exception as e:
+            print(f"Native Word conversion failed ({e}). Falling back to manual engine.")
+    
+    # METHOD 2: Manual ReportLab Construction (Fallback)
+    # Re-implements document structure if Native conversion fails
     try:
         # Standard Margins
         doc_pdf = SimpleDocTemplate(result_path, pagesize=letter,
